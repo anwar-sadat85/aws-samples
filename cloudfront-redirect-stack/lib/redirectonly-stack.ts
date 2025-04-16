@@ -14,7 +14,7 @@ export class RedirectonlyStack extends Stack {
         data: [
           {
             key: "sample",
-            value: "https://www.example.com/new"
+            value: "https://www.example.com/new/old"
           }
         ]
       }))
