@@ -11,7 +11,6 @@ async function handler(event) {
     // Use the first segment of the pathname as key
     // For example http(s)://domain/<key>/something/else
     const pathSegments = request.uri.split('/')
-    
     const key = pathSegments[pathSegments.length - 1]
     try {
         // Replace the first path of the pathname with the value of the key
