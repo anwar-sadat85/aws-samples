@@ -16,7 +16,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "../../amplify/data/resource": ["./dist-types/amplify/data/resource.d.ts"]
     }
   },
   "include": ["src"],
