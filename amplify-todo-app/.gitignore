@@ -4,3 +4,5 @@ dist
 amplify_outputs.json
 .env
 .env.local
+dist-types/
+*.tsbuildinfo
