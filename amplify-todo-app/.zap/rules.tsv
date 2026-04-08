@@ -1,0 +1,41 @@
+# ZAP alert rule overrides for the ONWARD PEP application
+# Format: <rule-id>	<action>	<parameter (optional)>
+# Actions: IGNORE | WARN | FAIL
+#
+# Reference: https://www.zaproxy.org/docs/docker/about/#alert-overrides
+
+# ── False positives for Cognito-auth'd SPAs ─────────────────────────────────
+
+# Anti-CSRF tokens: not applicable — app uses JWT/Cognito, not form-based CSRF
+10202	IGNORE	(Absence of Anti-CSRF Tokens)
+
+# CSP: configured via Amplify custom headers — verify in Amplify console first
+10038	WARN	(Content Security Policy Header Not Set)
+
+# ── Common AWS / CDN noise ────────────────────────────────────────────────────
+
+# Timestamp disclosure in HTTP response headers (CloudFront Date header)
+10096	IGNORE	(Timestamp Disclosure)
+
+# Information disclosure via server header (CloudFront sets "Server: CloudFront")
+10036	IGNORE	(Server Leaks Version Information via Server HTTP Response Header Field)
+
+# Cache-control on API responses: AppSync / APIGW manage this deliberately
+10015	WARN	(Re-examine Cache-control Directives)
+
+# ── AppSync / GraphQL specifics ───────────────────────────────────────────────
+
+# Private IP disclosure: AppSync VPC resolver IPs can appear in error messages
+2	WARN	(Private IP Disclosure)
+
+# ── Tune scan aggressiveness (keep these as WARN until baseline is established)
+
+# SQL injection: WARN first — Lambda uses DynamoDB (NoSQL), not SQL
+40018	WARN	(SQL Injection)
+
+# Path traversal: WARN — Lambda handlers serve structured JSON, not files
+6	WARN	(Path Traversal)
+
+100001	IGNORE	(Unexpected Content-Type was returned - cloud metadata probe false positive)
+
+10098	IGNORE	(Cross-Domain Misconfiguration - APIGW 403 on unauthenticated root)
