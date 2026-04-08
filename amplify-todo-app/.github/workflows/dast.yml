@@ -1,0 +1,163 @@
+name: DAST Security Scan
+
+on:
+  workflow_dispatch:
+
+# Prevent concurrent scans triggered by rapid successive builds
+concurrency:
+  group: dast
+  cancel-in-progress: false
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Scan 1: React SPA — baseline scan + AJAX spider
+  # Token fetched per-job as a step output to avoid GitHub Actions cross-job
+  # output masking which causes JWT tokens to be silently dropped.
+  # ─────────────────────────────────────────────────────────────────────────────
+  dast-website:
+    name: DAST — Website (SPA)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get Cognito ID Token
+        id: auth
+        run: |
+          RESULT=$(aws cognito-idp initiate-auth \
+            --cli-input-json "{
+              \"AuthFlow\": \"USER_PASSWORD_AUTH\",
+              \"ClientId\": \"${{ secrets.COGNITO_CLIENT_ID }}\",
+              \"AuthParameters\": {
+                \"USERNAME\": \"${{ secrets.DAST_USERNAME }}\",
+                \"PASSWORD\": \"${{ secrets.DAST_PASSWORD }}\"
+              }
+            }" \
+            --query 'AuthenticationResult.IdToken' \
+            --output text)
+          echo "id_token=$RESULT" >> "$GITHUB_OUTPUT"
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.15.0
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: ${{ steps.auth.outputs.id_token }}
+        with:
+          target: ${{ vars.DAST_WEBSITE_URL }}
+          cmd_options: '-j'
+          rules_file_name: '.zap/rules.tsv'
+          artifact_name: 'zap_website_report'
+          fail_action: false
+          allow_issue_writing: false
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Scan 2: REST API — APIGW + Lambda (ahapi)
+  # Bearer prefix required for REST API (differs from AppSync)
+  # ─────────────────────────────────────────────────────────────────────────────
+  dast-rest-api:
+    name: DAST — REST API (APIGW)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get Cognito ID Token
+        id: auth
+        run: |
+          RESULT=$(aws cognito-idp initiate-auth \
+            --cli-input-json "{
+              \"AuthFlow\": \"USER_PASSWORD_AUTH\",
+              \"ClientId\": \"${{ secrets.COGNITO_CLIENT_ID }}\",
+              \"AuthParameters\": {
+                \"USERNAME\": \"${{ secrets.DAST_USERNAME }}\",
+                \"PASSWORD\": \"${{ secrets.DAST_PASSWORD }}\"
+              }
+            }" \
+            --query 'AuthenticationResult.IdToken' \
+            --output text)
+          echo "id_token=$RESULT" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch OpenAPI spec
+        run: |
+          curl -sf \            
+            "${{ vars.REST_API_ENDPOINT }}/swagger.json" \
+            -o openapi-uat.json \
+          || echo "Could not fetch spec dynamically; falling back to committed file."
+
+      - name: ZAP API Scan — REST (OpenAPI)
+        uses: zaproxy/action-api-scan@v0.10.0
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: Bearer ${{ steps.auth.outputs.id_token }}
+        with:
+          target: '${{ vars.REST_API_ENDPOINT }}'
+          format: openapi
+          artifact_name: 'zap_rest_api_report'
+          fail_action: false
+          allow_issue_writing: false
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Scan 3: GraphQL — AppSync
+  # AppSync expects raw ID token in Authorization header — no "Bearer" prefix
+  # ─────────────────────────────────────────────────────────────────────────────
+  dast-graphql:
+    name: DAST — GraphQL (AppSync)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get Cognito ID Token
+        id: auth
+        run: |
+          RESULT=$(aws cognito-idp initiate-auth \
+            --cli-input-json "{
+              \"AuthFlow\": \"USER_PASSWORD_AUTH\",
+              \"ClientId\": \"${{ secrets.COGNITO_CLIENT_ID }}\",
+              \"AuthParameters\": {
+                \"USERNAME\": \"${{ secrets.DAST_USERNAME }}\",
+                \"PASSWORD\": \"${{ secrets.DAST_PASSWORD }}\"
+              }
+            }" \
+            --query 'AuthenticationResult.IdToken' \
+            --output text)
+          echo "id_token=$RESULT" >> "$GITHUB_OUTPUT"
+
+      - name: ZAP API Scan — GraphQL (AppSync)
+        uses: zaproxy/action-api-scan@v0.10.0
+        env:
+          ZAP_AUTH_HEADER: Authorization
+          ZAP_AUTH_HEADER_VALUE: ${{ steps.auth.outputs.id_token }}
+        with:
+          target: '${{ vars.APPSYNC_ENDPOINT }}'
+          format: graphql
+          artifact_name: 'zap_graphql_report'
+          fail_action: false
+          allow_issue_writing: false
