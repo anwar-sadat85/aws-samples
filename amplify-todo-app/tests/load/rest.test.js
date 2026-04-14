@@ -47,7 +47,7 @@ import { checkREST }    from './lib/checks.js';
 const PROFILE = __ENV.PROFILE || 'smoke';
 
 // p95 threshold for REST API: 1 500 ms
-export const options = buildOptions(PROFILE, 1500, 'rest_errors');
+export const options = buildOptions(PROFILE, 1500);
 
 // ─── Default function (runs per VU per iteration) ─────────────────────────────
 
