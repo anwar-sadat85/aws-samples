@@ -56,10 +56,10 @@ const STAGES = {
 
 /** Maximum acceptable error rate per profile. */
 const ERROR_RATE_THRESHOLDS = {
-  smoke:  'rate<0.05',
-  load:   'rate<0.01',
+  smoke:  'rate==0',
+  load:   'rate==0',
   stress: 'rate<0.10',
-  soak:   'rate<0.01',
+  soak:   'rate==0',
 };
 
 /**
