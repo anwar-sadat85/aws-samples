@@ -235,15 +235,9 @@ jobs:
         run: |
           set +e  # allow jq to fail gracefully if files are missing
 
-          # Read a single numeric value from the JSON. Returns "n/a" on failure.
-          read_value() {
-            local file="$1" metric="$2" field="$3"
-            jq -r --arg m "$metric" --arg f "$field" \
-              '.metrics[$m].values[$f] // "n/a"' "$file" 2>/dev/null || echo "n/a"
-          }
-
-          # Read a top-level integer field directly on a metric object.
-          # Used for .passes / .fails / .count which are not under .values.
+          # Read any field directly from a metric object.
+          # --summary-export places all values (p(95), avg, count, passes, fails…)
+          # directly on the metric — there is no intermediate .values sub-key.
           read_field() {
             local file="$1" metric="$2" field="$3"
             jq -r --arg m "$metric" --arg f "$field" \
@@ -285,12 +279,12 @@ jobs:
           GQL_FILE="reports/graphql-load.json"
           REST_FILE="reports/rest-load.json"
 
-          GQL_P95=$(read_value "$GQL_FILE"  "http_req_duration" "p(95)")
+          GQL_P95=$(read_field "$GQL_FILE"  "http_req_duration" "p(95)")
           GQL_REQ=$(read_field "$GQL_FILE"  "http_reqs"         "count")
           GQL_CHK_PASS=$(read_field "$GQL_FILE" "checks" "passes")
           GQL_CHK_FAIL=$(read_field "$GQL_FILE" "checks" "fails")
 
-          REST_P95=$(read_value "$REST_FILE" "http_req_duration" "p(95)")
+          REST_P95=$(read_field "$REST_FILE" "http_req_duration" "p(95)")
           REST_REQ=$(read_field "$REST_FILE" "http_reqs"         "count")
           REST_CHK_PASS=$(read_field "$REST_FILE" "checks" "passes")
           REST_CHK_FAIL=$(read_field "$REST_FILE" "checks" "fails")
