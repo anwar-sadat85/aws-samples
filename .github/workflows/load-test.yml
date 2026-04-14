@@ -1,16 +1,21 @@
 name: Load Tests — UAT
 
 # ─── Trigger ─────────────────────────────────────────────────────────────────
-# Fired automatically by the Amplify deployment pipeline via:
-#   gh api repos/{owner}/{repo}/dispatches \
-#     -f event_type=amplify-uat-deployed \
-#     -f client_payload[environment]=uat
+# Fired automatically by the Amplify deployment pipeline via the
+# load-test-dispatcher Lambda, which maps the Amplify appId to this
+# app-specific event type: amplify-uat-deployed-todo
+#
+# Path filter ensures this workflow only runs when files inside
+# amplify-todo-app/ change on push — other app folders are ignored.
 #
 # Or manually via GitHub Actions UI / CLI with a profile selection.
 # Manual runs default to smoke — select load, stress, or soak for deeper testing.
 on:
+  push:
+    paths:
+      - 'amplify-todo-app/**'
   repository_dispatch:
-    types: [amplify-uat-deployed]
+    types: [amplify-uat-deployed-todo]
   workflow_dispatch:
     inputs:
       profile:
@@ -28,7 +33,7 @@ on:
 # queues rather than cancels (cancel-in-progress: false) so results are never
 # silently dropped.
 concurrency:
-  group: load-tests-uat
+  group: load-tests-uat-todo
   cancel-in-progress: false
 
 # ─── Permissions ─────────────────────────────────────────────────────────────
@@ -95,7 +100,7 @@ jobs:
             --env TEST_TODO_ID="${TEST_TODO_ID}" \
             --env AWS_REGION="${AWS_REGION}" \
             --summary-export=reports/graphql-smoke.json \
-            tests/load/graphql.test.js &
+            amplify-todo-app/tests/load/graphql.test.js &
           GQL_PID=$!
 
           k6 run \
@@ -106,7 +111,7 @@ jobs:
             --env APIGW_BASE_URL="${APIGW_BASE_URL}" \
             --env AWS_REGION="${AWS_REGION}" \
             --summary-export=reports/rest-smoke.json \
-            tests/load/rest.test.js &
+            amplify-todo-app/tests/load/rest.test.js &
           REST_PID=$!
 
           GQL_EXIT=0
@@ -200,7 +205,7 @@ jobs:
             --env TEST_TODO_ID="${TEST_TODO_ID}" \
             --env AWS_REGION="${AWS_REGION}" \
             --summary-export=reports/graphql-load.json \
-            tests/load/graphql.test.js &
+            amplify-todo-app/tests/load/graphql.test.js &
           GQL_PID=$!
 
           k6 run \
@@ -211,7 +216,7 @@ jobs:
             --env APIGW_BASE_URL="${APIGW_BASE_URL}" \
             --env AWS_REGION="${AWS_REGION}" \
             --summary-export=reports/rest-load.json \
-            tests/load/rest.test.js &
+            amplify-todo-app/tests/load/rest.test.js &
           REST_PID=$!
 
           GQL_EXIT=0
@@ -298,7 +303,7 @@ jobs:
           REST_ERR_STATUS=$(threshold_status "$REST_FILE" "http_req_failed")
 
           cat >> "$GITHUB_STEP_SUMMARY" << SUMMARY
-          ## k6 Load Test Results — UAT
+          ## k6 Load Test Results — amplify-todo-app (UAT)
 
           **Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           **Triggered by:** `${{ github.event_name }}`
@@ -341,7 +346,7 @@ jobs:
           RESULTS_S3_BUCKET: ${{ secrets.RESULTS_S3_BUCKET }}
         run: |
           DATE=$(date -u +%Y-%m-%d)
-          S3_PREFIX="${{ github.repository }}/${{ github.ref_name }}/${DATE}/${{ github.run_id }}"
+          S3_PREFIX="amplify-todo-app/uat/${DATE}/${{ github.run_id }}"
 
           aws s3 cp reports/graphql-load.json \
             "s3://${RESULTS_S3_BUCKET}/${S3_PREFIX}/graphql-load.json"
