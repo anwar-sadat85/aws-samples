@@ -1,13 +1,28 @@
 name: Load Tests — UAT
 
 # ─── Trigger ─────────────────────────────────────────────────────────────────
-# Fired by the Amplify deployment pipeline via:
+# Fired automatically by the Amplify deployment pipeline via:
 #   gh api repos/{owner}/{repo}/dispatches \
 #     -f event_type=amplify-uat-deployed \
 #     -f client_payload[environment]=uat
+#
+# Or manually via GitHub Actions UI / CLI with a profile selection.
+# Manual runs default to smoke — select load, stress, or soak for deeper testing.
 on:
   repository_dispatch:
     types: [amplify-uat-deployed]
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Load profile to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - load
+          - stress
+          - soak
 
 # Only one load test run at a time — a second deploy during an in-progress run
 # queues rather than cancels (cancel-in-progress: false) so results are never
@@ -57,6 +72,8 @@ jobs:
 
       # Run GraphQL and REST smoke tests in parallel using background processes.
       # Both PIDs are captured; the step fails if either test exits non-zero.
+      # Profile is always smoke in this job — workflow_dispatch profile selection
+      # only affects the load-test job.
       - name: Run smoke tests (GraphQL + REST in parallel)
         env:
           COGNITO_CLIENT_ID:     ${{ secrets.COGNITO_CLIENT_ID }}
@@ -117,13 +134,18 @@ jobs:
 
   # ════════════════════════════════════════════════════════════════════════════
   # Job 2: Load Tests
-  # Runs only when both smoke tests pass. Runs GraphQL and REST load profiles
-  # in parallel, then writes a job summary and uploads results to S3.
+  # Runs only when both smoke tests pass. Skipped when a manual run selects
+  # the smoke profile — smoke-only runs exit after Job 1.
+  # Runs GraphQL and REST profiles in parallel, then writes a job summary
+  # and uploads results to S3.
   # ════════════════════════════════════════════════════════════════════════════
   load-test:
     name: Load Tests
     runs-on: ubuntu-22.04
     needs: smoke-test
+    if: |
+      github.event_name == 'repository_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && inputs.profile != 'smoke')
 
     steps:
       - name: Checkout
@@ -151,6 +173,9 @@ jobs:
         run: mkdir -p reports
 
       # Run GraphQL and REST load tests in parallel.
+      # Profile is determined by the trigger:
+      #   - repository_dispatch → always 'load'
+      #   - workflow_dispatch   → user-selected profile (load, stress, or soak)
       # k6 exits non-zero when a threshold is breached — capture both exit codes
       # and report them individually before failing the step.
       - name: Run load tests (GraphQL + REST in parallel)
@@ -162,11 +187,12 @@ jobs:
           APIGW_BASE_URL:        ${{ secrets.APIGW_BASE_URL }}
           TEST_TODO_ID:          ${{ secrets.TEST_TODO_ID }}
           AWS_REGION:            ${{ secrets.AWS_REGION }}
+          LOAD_PROFILE:          ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'load' }}
         run: |
           set -euo pipefail
 
           k6 run \
-            --env PROFILE=load \
+            --env PROFILE="${LOAD_PROFILE}" \
             --env COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
             --env COGNITO_TEST_USER="${COGNITO_TEST_USER}" \
             --env COGNITO_TEST_PASSWORD="${COGNITO_TEST_PASSWORD}" \
@@ -178,7 +204,7 @@ jobs:
           GQL_PID=$!
 
           k6 run \
-            --env PROFILE=load \
+            --env PROFILE="${LOAD_PROFILE}" \
             --env COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
             --env COGNITO_TEST_USER="${COGNITO_TEST_USER}" \
             --env COGNITO_TEST_PASSWORD="${COGNITO_TEST_PASSWORD}" \
@@ -275,8 +301,8 @@ jobs:
           ## k6 Load Test Results — UAT
 
           **Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          **Triggered by:** \`amplify-uat-deployed\`
-          **Profile:** load
+          **Triggered by:** `${{ github.event_name }}`
+          **Profile:** ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'load' }}
 
           ### GraphQL (AppSync)
 
