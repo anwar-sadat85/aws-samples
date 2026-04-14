@@ -1,0 +1,28 @@
+{
+  "name": "load-test-trigger",
+  "version": "0.1.0",
+  "bin": {
+    "load-test-trigger": "bin/load-test-trigger.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "diff": "cdk diff"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "aws-cdk": "^2.180.0",
+    "esbuild": "^0.24.0",
+    "typescript": "~5.7.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-amplify": "^3.0.0",
+    "@aws-sdk/client-ssm": "^3.0.0",
+    "aws-cdk-lib": "^2.180.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  }
+}
