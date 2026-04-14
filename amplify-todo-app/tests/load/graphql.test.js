@@ -44,7 +44,7 @@ import { checkGraphQL } from './lib/checks.js';
 const PROFILE = __ENV.PROFILE || 'smoke';
 
 // p95 threshold for AppSync GraphQL: 2 000 ms
-export const options = buildOptions(PROFILE, 2000);
+export const options = buildOptions(PROFILE, 2000,'graphql_errors');
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -65,19 +65,29 @@ const ERROR_RATE_THRESHOLDS = {
 /**
  * Build a k6 options object for the given profile.
  *
- * @param {string} profileName - One of: smoke, load, stress, soak
- * @param {number} p95Ms       - p95 latency threshold in milliseconds
- *                               (2000 for GraphQL, 1500 for REST)
+ * Uses custom error rate metrics (graphql_errors or rest_errors) instead of
+ * k6's built-in http_req_failed. The built-in metric reports false negatives
+ * when all requests succeed — its passes/fails fields track something different
+ * from what the threshold engine expects, causing thresholds to resolve as
+ * false even when no errors occurred.
+ *
+ * @param {string} profileName  - One of: smoke, load, stress, soak
+ * @param {number} p95Ms        - p95 latency threshold in milliseconds
+ *                                (2000 for GraphQL, 1500 for REST)
+ * @param {string} errorMetric  - Custom Rate metric name to threshold on:
+ *                                'graphql_errors' or 'rest_errors'
  * @returns {object} k6 options suitable for export const options = ...
  */
-export function buildOptions(profileName, p95Ms) {
-  const stages    = STAGES[profileName]             || STAGES.smoke;
+export function buildOptions(profileName, p95Ms, errorMetric) {
+  const stages    = STAGES[profileName]                || STAGES.smoke;
   const errorRate = ERROR_RATE_THRESHOLDS[profileName] || ERROR_RATE_THRESHOLDS.smoke;
 
   return {
     stages,
     thresholds: {
-      http_req_failed:   [errorRate],
+      // Custom metric from checks.js — accurately reflects operation failures.
+      // Falls back to http_req_failed if no errorMetric supplied.
+      [errorMetric || 'http_req_failed']: [errorRate],
       http_req_duration: [`p(95)<${p95Ms}`],
     },
   };
