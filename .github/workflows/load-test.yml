@@ -62,9 +62,9 @@ jobs:
       # https://grafana.com/docs/k6/latest/set-up/install-k6/
       - name: Install k6
         run: |
-          curl -sL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz \
-            | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.54.0-linux-amd64/k6
-          k6 version      
+          curl -sL https://github.com/grafana/k6/releases/download/v0.45.1/k6-v0.45.1-linux-amd64.tar.gz \
+            | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.45.1-linux-amd64/k6
+          k6 version    
 
       - name: Create reports directory
         run: mkdir -p reports
@@ -152,9 +152,9 @@ jobs:
 
       - name: Install k6
         run: |
-          curl -sL https://github.com/grafana/k6/releases/download/v0.54.0/k6-v0.54.0-linux-amd64.tar.gz \
-            | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.54.0-linux-amd64/k6
-          k6 version 
+          curl -sL https://github.com/grafana/k6/releases/download/v0.45.1/k6-v0.45.1-linux-amd64.tar.gz \
+            | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.45.1-linux-amd64/k6
+          k6 version
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
