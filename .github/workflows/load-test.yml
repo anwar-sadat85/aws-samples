@@ -225,92 +225,97 @@ jobs:
       # Parse the --summary-export JSON files and write a markdown table to
       # $GITHUB_STEP_SUMMARY. Runs even if the load tests fail (if: always())
       # so that partial results are still visible.
+      #
+      # NOTE: --summary-export always serializes threshold booleans as false
+      # regardless of actual pass/fail — this is a known bug in the deprecated
+      # export format. Pass/fail status is therefore derived directly from the
+      # metric VALUES (p95 and checks.fails), which are always correct.
       - name: Write job summary
         if: always()
         run: |
           set +e  # allow jq to fail gracefully if files are missing
 
-          extract_metric() {
-            local file="$1"
-            local metric="$2"
-            local field="$3"
+          # Read a single numeric value from the JSON. Returns "n/a" on failure.
+          read_value() {
+            local file="$1" metric="$2" field="$3"
             jq -r --arg m "$metric" --arg f "$field" \
               '.metrics[$m].values[$f] // "n/a"' "$file" 2>/dev/null || echo "n/a"
           }
 
-          threshold_status() {
-            local file="$1"
-            local metric="$2"
-            # Returns ✅ if all thresholds for this metric passed, ❌ otherwise
+          # Read a top-level integer field directly on a metric object.
+          # Used for .passes / .fails / .count which are not under .values.
+          read_field() {
+            local file="$1" metric="$2" field="$3"
+            jq -r --arg m "$metric" --arg f "$field" \
+              '.metrics[$m][$f] // "n/a"' "$file" 2>/dev/null || echo "n/a"
+          }
+
+          # Compare p95 (ms) against a numeric limit. Derives from actual value —
+          # does NOT read the threshold boolean in the JSON (always false, unreliable).
+          latency_ok() {
+            local p95="$1" limit="$2"
+            [ "$p95" = "n/a" ] || [ "$p95" = "null" ] && { echo "— n/a"; return; }
             local ok
-            ok=$(jq -r --arg m "$metric" \
-              '[.metrics[$m].thresholds // {} | to_entries[].value.ok] | all' \
-              "$file" 2>/dev/null)
-            if [ "$ok" = "true" ]; then
-              echo "✅ Pass"
-            elif [ "$ok" = "false" ]; then
-              echo "❌ Fail"
-            else
-              echo "— n/a"
-            fi
+            ok=$(awk "BEGIN { print ($p95 < $limit) ? \"1\" : \"0\" }")
+            [ "$ok" = "1" ] && echo "✅ Pass" || echo "❌ Fail"
+          }
+
+          # Pass if checks.fails == 0. Derives from actual integer count —
+          # does NOT read the threshold boolean in the JSON (always false, unreliable).
+          checks_ok() {
+            local fails="$1"
+            [ "$fails" = "n/a" ] || [ "$fails" = "null" ] && { echo "— n/a"; return; }
+            [ "$fails" -eq 0 ] && echo "✅ Pass" || echo "❌ Fail"
           }
 
           format_ms() {
             local val="$1"
-            if [ "$val" = "n/a" ] || [ "$val" = "null" ]; then
-              echo "n/a"
-            else
-              # Round to nearest integer and append ms
-              printf "%.0f ms\n" "$val"
-            fi
+            [ "$val" = "n/a" ] || [ "$val" = "null" ] && { echo "n/a"; return; }
+            printf "%.0f ms\n" "$val"
           }
 
-          format_rate() {
-            local val="$1"
-            if [ "$val" = "n/a" ] || [ "$val" = "null" ]; then
-              echo "n/a"
-            else
-              # Express as percentage with 2 decimal places
-              awk "BEGIN { printf \"%.2f%%\n\", $val * 100 }"
-            fi
+          # Express check failure count as a percentage of total check() calls.
+          format_check_rate() {
+            local passes="$1" fails="$2"
+            local total=$((passes + fails))
+            [ "$total" -eq 0 ] && { echo "n/a"; return; }
+            awk "BEGIN { printf \"%.2f%%\n\", ($fails / $total) * 100 }"
           }
 
           GQL_FILE="reports/graphql-load.json"
           REST_FILE="reports/rest-load.json"
 
-          GQL_P95=$(extract_metric "$GQL_FILE"  "http_req_duration" "p(95)")
-          GQL_ERR=$(extract_metric "$GQL_FILE"  "http_req_failed"   "rate")
-          GQL_REQ=$(extract_metric "$GQL_FILE"  "http_reqs"         "count")
-          GQL_DUR_STATUS=$(threshold_status "$GQL_FILE"  "http_req_duration")
-          GQL_ERR_STATUS=$(threshold_status "$GQL_FILE"  "http_req_failed")
+          GQL_P95=$(read_value "$GQL_FILE"  "http_req_duration" "p(95)")
+          GQL_REQ=$(read_field "$GQL_FILE"  "http_reqs"         "count")
+          GQL_CHK_PASS=$(read_field "$GQL_FILE" "checks" "passes")
+          GQL_CHK_FAIL=$(read_field "$GQL_FILE" "checks" "fails")
 
-          REST_P95=$(extract_metric "$REST_FILE" "http_req_duration" "p(95)")
-          REST_ERR=$(extract_metric "$REST_FILE" "http_req_failed"   "rate")
-          REST_REQ=$(extract_metric "$REST_FILE" "http_reqs"         "count")
-          REST_DUR_STATUS=$(threshold_status "$REST_FILE" "http_req_duration")
-          REST_ERR_STATUS=$(threshold_status "$REST_FILE" "http_req_failed")
+          REST_P95=$(read_value "$REST_FILE" "http_req_duration" "p(95)")
+          REST_REQ=$(read_field "$REST_FILE" "http_reqs"         "count")
+          REST_CHK_PASS=$(read_field "$REST_FILE" "checks" "passes")
+          REST_CHK_FAIL=$(read_field "$REST_FILE" "checks" "fails")
 
           cat >> "$GITHUB_STEP_SUMMARY" << SUMMARY
           ## k6 Load Test Results — amplify-todo-app (UAT)
 
           **Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          **Triggered by:** `${{ github.event_name }}`
+          **Triggered by:** \`${{ github.event_name }}\`
           **Profile:** ${{ github.event_name == 'workflow_dispatch' && inputs.profile || 'load' }}
 
-          ### GraphQL (AppSync)
+          ### GraphQL (AppSync) — p95 threshold: 2 000 ms
 
           | Metric | Value | Threshold |
           |--------|-------|-----------|
-          | p95 latency | $(format_ms "$GQL_P95") | $GQL_DUR_STATUS |
-          | Error rate | $(format_rate "$GQL_ERR") | $GQL_ERR_STATUS |
+          | p95 latency | $(format_ms "$GQL_P95") | $(latency_ok "$GQL_P95" 2000) |
+          | Check failures | $(format_check_rate "$GQL_CHK_PASS" "$GQL_CHK_FAIL") | $(checks_ok "$GQL_CHK_FAIL") |
           | Total requests | $GQL_REQ | — |
 
-          ### REST (API Gateway)
+          ### REST (API Gateway) — p95 threshold: 1 500 ms
 
           | Metric | Value | Threshold |
           |--------|-------|-----------|
-          | p95 latency | $(format_ms "$REST_P95") | $REST_DUR_STATUS |
-          | Error rate | $(format_rate "$REST_ERR") | $REST_ERR_STATUS |
+          | p95 latency | $(format_ms "$REST_P95") | $(latency_ok "$REST_P95" 1500) |
+          | Check failures | $(format_check_rate "$REST_CHK_PASS" "$REST_CHK_FAIL") | $(checks_ok "$REST_CHK_FAIL") |
           | Total requests | $REST_REQ | — |
 
           > Full JSON reports are attached as artifact **k6-results-${{ github.run_id }}**
