@@ -22,10 +22,14 @@ applications:
       phases:
         preTest:
           commands:
-            # Install k6 v0.45.1 directly — the apt repository installs the latest
-            # version which has known issues with --summary-export threshold output.
+            # Install k6 to $HOME/bin — /usr/local/bin is not writable in Amplify test runner
+            - mkdir -p $HOME/bin
             - curl -sL https://github.com/grafana/k6/releases/download/v0.45.1/k6-v0.45.1-linux-amd64.tar.gz
-                | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.45.1-linux-amd64/k6
+                | tar -xz --strip-components=1 -C $HOME/bin k6-v0.45.1-linux-amd64/k6
+            - export PATH=$HOME/bin:$PATH
+            - k6 version
+            # Create reports directory early so Amplify artifact collection never fails
+            - mkdir -p reports
         test:
           commands:
             # COGNITO_TEST_USER and COGNITO_TEST_PASSWORD are injected from
@@ -43,9 +47,9 @@ applications:
                 exit 0
               fi
 
-              mkdir -p reports
+              
 
-              k6 run \
+              $HOME/bin/k6 run \
                 --env PROFILE=smoke \
                 --env APPSYNC_ENDPOINT="${APPSYNC_ENDPOINT}" \
                 --env COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
@@ -56,7 +60,7 @@ applications:
                 tests/load/graphql.test.js &
               GRAPHQL_PID=$!
 
-              k6 run \
+              $HOME/bin/k6 run \
                 --env PROFILE=smoke \
                 --env APIGW_BASE_URL="${APIGW_BASE_URL}" \
                 --env COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
