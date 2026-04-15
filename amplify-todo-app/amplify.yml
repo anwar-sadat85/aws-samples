@@ -38,10 +38,12 @@ applications:
             - cat amplify_outputs.json 2>/dev/null || cat ../amplify_outputs.json 2>/dev/null || echo "amplify_outputs.json not found"
         test:
           commands:
-            # COGNITO_TEST_USER and COGNITO_TEST_PASSWORD are injected from
-            # Amplify Secret management (Hosting → Secret management in the
-            # Amplify console). The smoke tests are skipped gracefully if
-            # either secret is not configured.
+            # COGNITO_TEST_USER and COGNITO_TEST_PASSWORD must be set as
+            # Amplify environment variables (App settings → Environment
+            # variables in the Amplify console) — NOT in Hosting → Secret
+            # management. Secrets are only injected during the backend build
+            # phase and are not available in the test phase. The smoke tests
+            # are skipped gracefully if either variable is not configured.
             - |
               OUTPUTS_FILE="amplify_outputs.json"
               if [ ! -f "$OUTPUTS_FILE" ]; then
