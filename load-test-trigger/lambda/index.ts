@@ -98,7 +98,7 @@ export const handler = async (event: AmplifyDeploymentEvent): Promise<void> => {
       "X-GitHub-Api-Version": "2022-11-28",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ ref: match.ref }),
+    body: JSON.stringify({ ref: match.ref, inputs: { profile: "load" } }),
   });
 
   if (!response.ok) {
