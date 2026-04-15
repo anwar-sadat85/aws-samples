@@ -11,9 +11,6 @@ name: Load Tests — UAT
 # Or manually via GitHub Actions UI / CLI with a profile selection.
 # Manual runs default to smoke — select load, stress, or soak for deeper testing.
 on:
-  push:
-    paths:
-      - 'amplify-todo-app/**'
   repository_dispatch:
     types: [amplify-uat-deployed-todo]
   workflow_dispatch:
