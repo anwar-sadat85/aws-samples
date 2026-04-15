@@ -43,7 +43,8 @@ applications:
               export AWS_REGION=$(jq -r '.auth.aws_region' amplify_outputs.json)
 
               if [ -z "${COGNITO_TEST_USER}" ] || [ -z "${COGNITO_TEST_PASSWORD}" ]; then
-                echo "Smoke tests skipped — COGNITO_TEST_USER or COGNITO_TEST_PASSWORD not configured in Amplify Secret management"
+                echo "Smoke tests skipped — COGNITO_TEST_USER or COGNITO_TEST_PASSWORD not configured in Amplify Environment variables"
+                echo '{"skipped": true, "reason": "credentials not configured"}' > reports/skipped.json
                 exit 0
               fi
 
