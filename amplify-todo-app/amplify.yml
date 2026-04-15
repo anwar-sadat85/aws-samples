@@ -30,6 +30,9 @@ applications:
             - k6 version
             # Create reports directory early so Amplify artifact collection never fails
             - mkdir -p reports
+            - pwd
+            - find . -name "amplify_outputs.json" 2>/dev/null
+            - cat amplify_outputs.json
         test:
           commands:
             # COGNITO_TEST_USER and COGNITO_TEST_PASSWORD are injected from
