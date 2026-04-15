@@ -1,0 +1,82 @@
+version: 1
+applications:
+  - backend:
+      phases:
+        build:
+          commands:
+            - npm install
+            - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm install
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+    test:
+      phases:
+        preTest:
+          commands:
+            # Install k6 v0.45.1 directly — the apt repository installs the latest
+            # version which has known issues with --summary-export threshold output.
+            - curl -sL https://github.com/grafana/k6/releases/download/v0.45.1/k6-v0.45.1-linux-amd64.tar.gz
+                | tar -xz --strip-components=1 -C /usr/local/bin k6-v0.45.1-linux-amd64/k6
+        test:
+          commands:
+            # COGNITO_TEST_USER and COGNITO_TEST_PASSWORD are injected from
+            # Amplify Secret management (Hosting → Secret management in the
+            # Amplify console). The smoke tests are skipped gracefully if
+            # either secret is not configured.
+            - |
+              export APPSYNC_ENDPOINT=$(jq -r '.data.url' amplify_outputs.json)
+              export APIGW_BASE_URL=$(jq -r '.custom.tasksApiUrl' amplify_outputs.json | sed 's|/$||')
+              export COGNITO_CLIENT_ID=$(jq -r '.auth.user_pool_client_id' amplify_outputs.json)
+              export AWS_REGION=$(jq -r '.auth.aws_region' amplify_outputs.json)
+
+              if [ -z "${COGNITO_TEST_USER}" ] || [ -z "${COGNITO_TEST_PASSWORD}" ]; then
+                echo "Smoke tests skipped — COGNITO_TEST_USER or COGNITO_TEST_PASSWORD not configured in Amplify Secret management"
+                exit 0
+              fi
+
+              mkdir -p reports
+
+              k6 run \
+                --env PROFILE=smoke \
+                --env APPSYNC_ENDPOINT="${APPSYNC_ENDPOINT}" \
+                --env COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
+                --env COGNITO_TEST_USER="${COGNITO_TEST_USER}" \
+                --env COGNITO_TEST_PASSWORD="${COGNITO_TEST_PASSWORD}" \
+                --env AWS_REGION="${AWS_REGION}" \
+                --summary-export=reports/graphql-smoke.json \
+                tests/load/graphql.test.js &
+              GRAPHQL_PID=$!
+
+              k6 run \
+                --env PROFILE=smoke \
+                --env APIGW_BASE_URL="${APIGW_BASE_URL}" \
+                --env COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID}" \
+                --env COGNITO_TEST_USER="${COGNITO_TEST_USER}" \
+                --env COGNITO_TEST_PASSWORD="${COGNITO_TEST_PASSWORD}" \
+                --env AWS_REGION="${AWS_REGION}" \
+                --summary-export=reports/rest-smoke.json \
+                tests/load/rest.test.js &
+              REST_PID=$!
+
+              GRAPHQL_EXIT=0; REST_EXIT=0
+              wait $GRAPHQL_PID || GRAPHQL_EXIT=$?
+              wait $REST_PID || REST_EXIT=$?
+
+              if [ $GRAPHQL_EXIT -ne 0 ] || [ $REST_EXIT -ne 0 ]; then
+                echo "Smoke tests failed — graphql exit=${GRAPHQL_EXIT}, rest exit=${REST_EXIT}"
+                exit 1
+              fi
+      artifacts:
+        baseDirectory: reports
+        files:
+          - '**/*'
+    appRoot: amplify-todo-app
