@@ -22,17 +22,20 @@ applications:
       phases:
         preTest:
           commands:
-            # Install k6 to $HOME/bin — /usr/local/bin is not writable in Amplify test runner
+            # Install k6 and jq to $HOME/bin — /usr/local/bin is not writable in Amplify test runner
             - mkdir -p $HOME/bin
             - curl -sL https://github.com/grafana/k6/releases/download/v0.45.1/k6-v0.45.1-linux-amd64.tar.gz
                 | tar -xz --strip-components=1 -C $HOME/bin k6-v0.45.1-linux-amd64/k6
-            - export PATH=$HOME/bin:$PATH
-            - k6 version
+            - curl -sL https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 -o $HOME/bin/jq
+            - chmod +x $HOME/bin/jq
+            - $HOME/bin/k6 version
+            - $HOME/bin/jq --version
             # Create reports directory early so Amplify artifact collection never fails
             - mkdir -p reports
+            # Debug — confirm working directory and amplify_outputs.json location
             - pwd
             - find . -name "amplify_outputs.json" 2>/dev/null
-            - cat amplify_outputs.json
+            - cat amplify_outputs.json 2>/dev/null || cat ../amplify_outputs.json 2>/dev/null || echo "amplify_outputs.json not found"
         test:
           commands:
             # COGNITO_TEST_USER and COGNITO_TEST_PASSWORD are injected from
@@ -40,18 +43,25 @@ applications:
             # Amplify console). The smoke tests are skipped gracefully if
             # either secret is not configured.
             - |
-              export APPSYNC_ENDPOINT=$(jq -r '.data.url' amplify_outputs.json)
-              export APIGW_BASE_URL=$(jq -r '.custom.tasksApiUrl' amplify_outputs.json | sed 's|/$||')
-              export COGNITO_CLIENT_ID=$(jq -r '.auth.user_pool_client_id' amplify_outputs.json)
-              export AWS_REGION=$(jq -r '.auth.aws_region' amplify_outputs.json)
+              OUTPUTS_FILE="amplify_outputs.json"
+              if [ ! -f "$OUTPUTS_FILE" ]; then
+                OUTPUTS_FILE="../amplify_outputs.json"
+              fi
+
+              export APPSYNC_ENDPOINT=$($HOME/bin/jq -r '.data.url' "$OUTPUTS_FILE")
+              export APIGW_BASE_URL=$($HOME/bin/jq -r '.custom.tasksApiUrl' "$OUTPUTS_FILE" | sed 's|/$||')
+              export COGNITO_CLIENT_ID=$($HOME/bin/jq -r '.auth.user_pool_client_id' "$OUTPUTS_FILE")
+              export AWS_REGION=$($HOME/bin/jq -r '.auth.aws_region' "$OUTPUTS_FILE")
+
+              echo "COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}"
+              echo "APPSYNC_ENDPOINT=${APPSYNC_ENDPOINT}"
+              echo "APIGW_BASE_URL=${APIGW_BASE_URL}"
 
               if [ -z "${COGNITO_TEST_USER}" ] || [ -z "${COGNITO_TEST_PASSWORD}" ]; then
-                echo "Smoke tests skipped — COGNITO_TEST_USER or COGNITO_TEST_PASSWORD not configured in Amplify Environment variables"
+                echo "Smoke tests skipped — COGNITO_TEST_USER or COGNITO_TEST_PASSWORD not configured in Amplify Secret management"
                 echo '{"skipped": true, "reason": "credentials not configured"}' > reports/skipped.json
                 exit 0
               fi
-
-              
 
               $HOME/bin/k6 run \
                 --env PROFILE=smoke \
