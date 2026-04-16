@@ -103,15 +103,18 @@ test.describe('Todo module', () => {
     const section = todosSection(page);
 
     // Delete all visible todos so we can reach the empty state.
-    // Each deletion triggers the AppSync subscription which removes the item
-    // from the list, so we re-query after every click.
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const deleteBtn = section.getByTitle('Delete').first();
-      if (!(await deleteBtn.isVisible())) break;
-      await deleteBtn.click();
-      // Wait for that specific button to leave the DOM before checking again.
-      await expect(deleteBtn).not.toBeVisible();
+    // We use the list-item *count* as the exit condition rather than a button
+    // locator, because `section.getByTitle('Delete').first()` is a dynamic
+    // locator — after a deletion it immediately re-evaluates to the *next*
+    // button, which is still visible, causing the old `not.toBeVisible()`
+    // check to time out.
+    const listItems = section.getByRole('listitem');
+    let remaining = await listItems.count();
+    while (remaining > 0) {
+      await section.getByTitle('Delete').first().click();
+      remaining -= 1;
+      // Wait for AppSync subscription to push the deletion back to the UI.
+      await expect(listItems).toHaveCount(remaining);
     }
 
     await expect(section.getByText('No todos yet. Add one above.')).toBeVisible();

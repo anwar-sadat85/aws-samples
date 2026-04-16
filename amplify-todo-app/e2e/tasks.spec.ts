@@ -164,11 +164,14 @@ test.describe('Tasks module', () => {
   test('empty state is shown when no tasks exist', async ({ page }) => {
     const section = tasksSection(page);
 
-    while (true) {
-      const deleteBtn = section.getByTitle('Delete').first();
-      if (!(await deleteBtn.isVisible())) break;
-      await deleteBtn.click();
-      await expect(deleteBtn).not.toBeVisible();
+    // Use count-based tracking — see the equivalent loop in todo.spec.ts for
+    // the explanation of why we don't rely on a button locator's visibility.
+    const listItems = section.getByRole('listitem');
+    let remaining = await listItems.count();
+    while (remaining > 0) {
+      await section.getByTitle('Delete').first().click();
+      remaining -= 1;
+      await expect(listItems).toHaveCount(remaining);
     }
 
     await expect(section.getByText('No tasks yet. Add one above.')).toBeVisible();
