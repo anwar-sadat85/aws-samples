@@ -167,13 +167,15 @@ test.describe('Tasks module', () => {
     // Use count-based tracking — see the equivalent loop in todo.spec.ts for
     // the explanation of why we don't rely on a button locator's visibility.
     const listItems = section.getByRole('listitem');
+    
     let remaining = await listItems.count();
+    console.log(`remaining tasks...${remaining}`);
     while (remaining > 0) {
       await section.getByTitle('Delete').first().click();
       remaining -= 1;
       await expect(listItems).toHaveCount(remaining);
     }
-
+    console.log(`remaining tasks after delete...${remaining}`);
     await expect(section.getByText('No tasks yet. Add one above.')).toBeVisible();
   });
 });
