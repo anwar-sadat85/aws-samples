@@ -36,6 +36,17 @@ applications:
             - pwd
             - find . -name "amplify_outputs.json" 2>/dev/null
             - cat amplify_outputs.json 2>/dev/null || cat ../amplify_outputs.json 2>/dev/null || echo "amplify_outputs.json not found"
+            # ---------------------------------------------------------------------------
+            # Playwright setup
+            # ---------------------------------------------------------------------------
+            # Install Playwright's Chromium browser binary (the npm package was already
+            # installed during the frontend preBuild via npm install).
+            - npx playwright install chromium --with-deps
+            # Serve the pre-built frontend on port 3000 in the background.
+            # The dist/ directory was produced by the frontend build phase.
+            - npx serve -s dist -l 3000 &
+            # Wait until the server is accepting connections before running tests.
+            - npx wait-on http://localhost:3000 --timeout 60000
         test:
           commands:
             # COGNITO_TEST_USER and COGNITO_TEST_PASSWORD must be set as
@@ -95,8 +106,17 @@ applications:
                 echo "Smoke tests failed — graphql exit=${GRAPHQL_EXIT}, rest exit=${REST_EXIT}"
                 exit 1
               fi
+            # ---------------------------------------------------------------------------
+            # Playwright E2E tests
+            # ---------------------------------------------------------------------------
+            - npx playwright test
+        postTest:
+          commands:
+            # Kill the static file server that was started in preTest.
+            - pkill -f "serve -s dist" || true
       artifacts:
-        baseDirectory: reports
+        baseDirectory: .
         files:
-          - '**/*'
+          - 'reports/**/*'
+          - 'playwright-report/**/*'
     appRoot: amplify-todo-app

@@ -76,6 +76,70 @@ amplify-todo-app/
 
 ---
 
+## Testing
+
+### Playwright E2E tests
+
+The `e2e/` directory contains Playwright tests covering the Todo module, Tasks
+module, and authentication boundaries.  Tests run against a locally-served
+production build (`http://localhost:3000`) and hit the real AWS backend — no
+services are mocked.
+
+#### Prerequisites
+
+| Variable | Where to get it |
+|---|---|
+| `COGNITO_TEST_USER` | The email address of the pre-existing Cognito test account |
+| `COGNITO_TEST_PASSWORD` | That account's password |
+
+> These are the same credentials used by the k6 smoke tests.  Configure them
+> once in **Amplify Console → App settings → Environment variables** and they
+> will be available to both the k6 and Playwright test phases in CI.
+
+#### Running locally
+
+```bash
+# 1. Build the app
+npm run build
+
+# 2. Serve the build on port 3000 (matches playwright.config.ts baseURL)
+npx serve -s dist -l 3000 &
+
+# 3. Export credentials
+export COGNITO_TEST_USER="testuser@example.com"
+export COGNITO_TEST_PASSWORD="Secr3t!"
+
+# 4. Install the Chromium browser (first run only)
+npx playwright install chromium
+
+# 5. Run all E2E tests
+npx playwright test
+
+# Open the HTML report after a run
+npx playwright show-report
+```
+
+#### Test structure
+
+| File | Coverage |
+|---|---|
+| `e2e/todo.spec.ts` | Create, toggle-complete, edit, delete a Todo; empty state |
+| `e2e/tasks.spec.ts` | Create, delete a Task; direct REST API backend assertion; user scoping |
+| `e2e/auth.spec.ts` | Unauthenticated visitors to `/todos` and `/tasks` see the sign-in form |
+
+#### How authentication works in tests
+
+`global-setup.ts` runs once before the full suite.  It calls `signIn()` from
+`aws-amplify/auth` using `COGNITO_TEST_USER` / `COGNITO_TEST_PASSWORD`, extracts
+the Cognito JWT tokens, injects them into a headless browser's `localStorage`
+using the key format Amplify v6 writes in a real browser session, and saves the
+resulting `storageState` to `playwright/.auth/user.json`.  Every test worker
+picks up that file automatically — no re-authentication per test.
+
+`playwright/.auth/user.json` is git-ignored and regenerated on each run.
+
+---
+
 ## How it works
 
 ### Todos (AppSync)
