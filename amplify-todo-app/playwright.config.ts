@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
+  tsconfig: './tsconfig.playwright.json',
   globalSetup: './global-setup.ts',
   reporter: [['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
