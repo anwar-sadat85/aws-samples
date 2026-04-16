@@ -125,9 +125,12 @@ applications:
           commands:
             # Kill the static file server that was started in preTest.
             - pkill -f "serve -s dist" || true
+            # Consolidate all report output into reports/ so Amplify can zip
+            # everything from a single baseDirectory.  Amplify test artifacts
+            # only support one baseDirectory; using "." produces no ZIP.
+            - cp -r playwright-report/ reports/playwright-report/ 2>/dev/null || true
       artifacts:
-        baseDirectory: .
+        baseDirectory: reports
         files:
-          - 'reports/**/*'
-          - 'playwright-report/**/*'
+          - '**/*'
     appRoot: amplify-todo-app
