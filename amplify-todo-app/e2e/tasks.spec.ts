@@ -1,4 +1,5 @@
-import { test, expect, type Locator } from '@playwright/test';
+/// <reference types="node" />
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -21,7 +22,7 @@ const TASKS_API_URL = outputs.custom.tasksApiUrl.replace(/\/$/, '');
 // ---------------------------------------------------------------------------
 
 /** Scope all selectors to the Ad-hoc Tasks panel. */
-function tasksSection(page: Parameters<typeof test>[1] extends (...args: infer A) => unknown ? A[0] : never) {
+function tasksSection(page: Page) {
   return page.locator('section.panel', {
     has: page.getByRole('heading', { name: 'Ad-hoc Tasks', level: 2 }),
   });
@@ -38,7 +39,7 @@ function taskItem(section: Locator, title: string): Locator {
  * Amplify v6 writes it under the key:
  *   CognitoIdentityServiceProvider.<clientId>.<username>.idToken
  */
-async function getIdToken(page: Parameters<typeof test>[1] extends (...args: infer A) => unknown ? A[0] : never): Promise<string> {
+async function getIdToken(page: Page): Promise<string> {
   const clientId = outputs.auth.user_pool_client_id;
   return page.evaluate((clientId: string) => {
     const prefix = `CognitoIdentityServiceProvider.${clientId}`;
