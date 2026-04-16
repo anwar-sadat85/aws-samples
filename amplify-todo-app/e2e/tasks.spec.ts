@@ -102,10 +102,15 @@ test.describe('Tasks module', () => {
   });
 
   // -------------------------------------------------------------------------
-  test.todo('user can edit an existing task — not yet implemented in TaskList');
+  // Edit and complete-toggle are not yet implemented in TaskList.
+  // These tests are declared so they appear in the report and act as a reminder.
+  test('user can edit an existing task', async () => {
+    test.skip(true, 'Not yet implemented: TaskList does not have an edit action');
+  });
 
-  // -------------------------------------------------------------------------
-  test.todo('user can mark a task as complete — not yet implemented in TaskList');
+  test('user can mark a task as complete', async () => {
+    test.skip(true, 'Not yet implemented: TaskList has no complete/done toggle');
+  });
 
   // -------------------------------------------------------------------------
   test('user can delete a task', async ({ page }) => {
