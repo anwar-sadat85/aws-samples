@@ -1,11 +1,11 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 /** Scope selectors to the Todos panel so they never accidentally hit Tasks. */
-function todosSection(page: Parameters<typeof test>[1] extends (...args: infer A) => unknown ? A[0] : never) {
+function todosSection(page: Page) {
   return page.locator('section.panel', {
     has: page.getByRole('heading', { name: 'Todos', level: 2 }),
   });

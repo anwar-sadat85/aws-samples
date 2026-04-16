@@ -1,9 +1,19 @@
+/// <reference types="node" />
 import { chromium } from '@playwright/test';
 import { Amplify } from 'aws-amplify';
 import { signIn, fetchAuthSession } from 'aws-amplify/auth';
-// Static JSON import — handled by esbuild (Playwright's compiler) and
-// TypeScript via resolveJsonModule.  Avoids any fs/path/url Node imports.
-import outputs from './amplify_outputs.json';
+import { createRequire } from 'node:module';
+
+// createRequire lets us load JSON in an ESM context without the
+// `with { type: 'json' }` import-attribute that esbuild omits.
+// (package.json has "type":"module", so bare `import … from '*.json'`
+//  throws at runtime under Node.js ESM.)
+const _require = createRequire(import.meta.url);
+const outputs = _require('./amplify_outputs.json') as {
+  auth: { user_pool_client_id: string; aws_region: string };
+  data: { url: string };
+  custom: { tasksApiUrl: string };
+};
 
 export default async function globalSetup() {
   const testUser = process.env.COGNITO_TEST_USER;
@@ -69,8 +79,8 @@ export default async function globalSetup() {
 
   // Persist the full browser storage (cookies + localStorage) so every test
   // worker can start already authenticated.
-  // The playwright/.auth/ directory is tracked via .gitkeep; recursive:true
-  // is a no-op if it already exists.
+  // The playwright/.auth/ directory is tracked via .gitkeep so this path always
+  // exists; storageState creates/overwrites user.json (git-ignored).
   await context.storageState({ path: 'playwright/.auth/user.json' });
 
   await browser.close();
