@@ -6,3 +6,7 @@ amplify_outputs.json
 .env.local
 dist-types/
 *.tsbuildinfo
+# Playwright
+playwright/.auth/user.json
+playwright-report/
+test-results/

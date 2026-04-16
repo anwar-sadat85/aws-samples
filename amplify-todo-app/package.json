@@ -20,6 +20,7 @@
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1027.0",
     "@aws-sdk/lib-dynamodb": "^3.1027.0",
+    "@playwright/test": "^1.59.1",
     "@types/node": "^25.5.2",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
@@ -32,7 +33,9 @@
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "serve": "^14.2.6",
     "typescript": "^5.2.2",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "wait-on": "^9.0.5"
   }
 }
