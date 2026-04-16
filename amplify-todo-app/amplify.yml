@@ -39,9 +39,20 @@ applications:
             # ---------------------------------------------------------------------------
             # Playwright setup
             # ---------------------------------------------------------------------------
-            # Install Playwright's Chromium browser binary (the npm package was already
-            # installed during the frontend preBuild via npm install).
-            - npx playwright install chromium --with-deps
+            # Install Chromium system-level dependencies.
+            # The Amplify test runner runs on Amazon Linux (yum/dnf), not Ubuntu,
+            # so --with-deps (apt-get) cannot be used.  Install the shared libraries
+            # that Chromium requires and let Playwright download only the browser
+            # binary itself.
+            - dnf install -y alsa-lib at-spi2-atk atk cups-libs gtk3
+                libXcomposite libXcursor libXdamage libXext libXi
+                libXrandr libXScrnSaver libXtst nss pango libdrm mesa-libgbm
+                2>/dev/null || yum install -y alsa-lib atk cups-libs gtk3
+                libXcomposite libXcursor libXdamage libXext libXi
+                libXrandr libXScrnSaver libXtst nss pango 2>/dev/null || true
+            # Download the Playwright-managed Chromium binary (no --with-deps so
+            # we don't attempt apt-get on a non-Debian host).
+            - npx playwright install chromium
             # Serve the pre-built frontend on port 3000 in the background.
             # The dist/ directory was produced by the frontend build phase.
             - npx serve -s dist -l 3000 &
