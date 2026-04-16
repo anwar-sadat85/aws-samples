@@ -110,6 +110,7 @@ test.describe('Todo module', () => {
     // check to time out.
     const listItems = section.getByRole('listitem');
     let remaining = await listItems.count();
+    console.log(`remaining todos...${remaining}`);
     while (remaining > 0) {
       await section.getByTitle('Delete').first().click();
       remaining -= 1;
