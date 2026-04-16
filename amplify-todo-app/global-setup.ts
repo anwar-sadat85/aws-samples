@@ -1,21 +1,9 @@
 import { chromium } from '@playwright/test';
 import { Amplify } from 'aws-amplify';
 import { signIn, fetchAuthSession } from 'aws-amplify/auth';
-import { readFileSync, mkdirSync } from 'fs';
-import { resolve, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Load amplify_outputs.json from the project root at runtime (not via static
-// import) so this Node.js script does not go through the Vite bundler.
-const outputs = JSON.parse(
-  readFileSync(resolve(__dirname, 'amplify_outputs.json'), 'utf-8')
-) as {
-  auth: { user_pool_client_id: string; aws_region: string };
-  data: { url: string };
-  custom: { tasksApiUrl: string };
-};
+// Static JSON import — handled by esbuild (Playwright's compiler) and
+// TypeScript via resolveJsonModule.  Avoids any fs/path/url Node imports.
+import outputs from './amplify_outputs.json';
 
 export default async function globalSetup() {
   const testUser = process.env.COGNITO_TEST_USER;
@@ -71,12 +59,18 @@ export default async function globalSetup() {
   // authenticated shell.
   await page.reload();
 
-  // Wait for the authenticated header element that App.tsx renders.
-  await page.locator('.user-email').waitFor({ timeout: 30_000 });
+  // Wait for the Sign Out button — it is only rendered inside the
+  // Authenticator's authenticated shell, so its presence confirms the session
+  // was accepted.  We cannot wait for .user-email to be *visible* because
+  // signInDetails.loginId is undefined on a localStorage token-restore (only
+  // set during a live signIn() call), which leaves the span empty and
+  // zero-sized (hidden in Playwright's terms).
+  await page.getByRole('button', { name: /sign out/i }).waitFor({ timeout: 30_000 });
 
   // Persist the full browser storage (cookies + localStorage) so every test
   // worker can start already authenticated.
-  mkdirSync(resolve(__dirname, 'playwright', '.auth'), { recursive: true });
+  // The playwright/.auth/ directory is tracked via .gitkeep; recursive:true
+  // is a no-op if it already exists.
   await context.storageState({ path: 'playwright/.auth/user.json' });
 
   await browser.close();
