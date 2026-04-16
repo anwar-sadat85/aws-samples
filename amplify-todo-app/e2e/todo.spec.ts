@@ -108,9 +108,12 @@ test.describe('Todo module', () => {
     // locator — after a deletion it immediately re-evaluates to the *next*
     // button, which is still visible, causing the old `not.toBeVisible()`
     // check to time out.
+    // Wait for the initial AppSync fetch to finish before counting.
+    // TodoList renders <p class="muted">Loading…</p> until loadTodos() resolves;
+    // calling .count() while that is still showing returns 0.
+    await expect(section.getByText('Loading…')).not.toBeVisible();
     const listItems = section.getByRole('listitem');
     let remaining = await listItems.count();
-    console.log(`remaining todos...${remaining}`);
     while (remaining > 0) {
       await section.getByTitle('Delete').first().click();
       remaining -= 1;
